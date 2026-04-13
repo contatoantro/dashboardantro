@@ -6,16 +6,16 @@ import { useRouter } from 'next/navigation';
 import { AppProvider, useApp, Page } from '@/contexts/AppContext';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import OverviewPage from '@/pages/OverviewPage';
-import ContentPage from '@/pages/ContentPage';
-import GoalsPage from '@/pages/GoalsPage';
-import ImportacoesPage from '@/pages/ImportacoesPage';
-import PlatformPage, { type PlatformKey } from '@/pages/PlatformPage';
-import SettingsPage from '@/pages/SettingsPage';
-import ContasPage from '@/pages/MarcasPage';      // gestão de brands de conteúdo
-import MarcasComerciais from '@/pages/MarcasComerciais'; // clientes de publi ← nova
-import InsightsPage from '@/pages/InsightsPage';
-import EntregasPage from '@/pages/EntregasPage';
+import OverviewPage from '@/views/OverviewPage';
+import ContentPage from '@/views/ContentPage';
+import GoalsPage from '@/views/GoalsPage';
+import ImportacoesPage from '@/views/ImportacoesPage';
+import PlatformPage, { type PlatformKey } from '@/views/PlatformPage';
+import SettingsPage from '@/views/SettingsPage';
+import ContasPage from '@/views/MarcasPage';      // gestão de brands de conteúdo
+import MarcasComerciais from '@/views/MarcasComerciais'; // clientes de publi ← nova
+import InsightsPage from '@/views/InsightsPage';
+import EntregasPage from '@/views/EntregasPage';
 
 const PLATFORM_PAGES = new Set<Page>(['instagram', 'tiktok', 'youtube', 'twitter', 'facebook']);
 
