@@ -78,10 +78,10 @@ const PLT_CONFIG = {
       { label: 'Dias',       fmtKey: 'posts',     deltaKey: 'posts',     isER: false },
     ],
     charts: [
-      { id: 'views',     metric: 'views', title: 'Views ao longo do tempo', span: 3, type: 'line'     },
-      { id: 'er',        metric: 'er',    title: 'Engagement Rate (%)',      span: 3, type: 'line'     },
-      { id: 'reach',     metric: 'reach', title: 'Alcance',                  span: 3, type: 'line'     },
-      { id: 'video_len', metric: null,    title: 'Duração dos vídeos',       span: 3, type: 'doughnut' },
+      { id: 'views',       metric: 'views',      title: 'Views ao longo do tempo',                span: 3, type: 'line' },
+      { id: 'er',          metric: 'er',          title: 'Engagement Rate (%)',                    span: 3, type: 'line' },
+      { id: 'engagement',  metric: 'engagement',  title: 'Engajamento (Likes + Comments + Shares)', span: 3, type: 'line' },
+      { id: 'profile',     metric: 'reach',       title: 'Visualizações de Perfil',               span: 3, type: 'line' },
     ],
   },
   youtube: {

@@ -206,11 +206,12 @@ function parseTikTokDaily(rows: Record<string, string>[]): DailyRow[] {
     const date = parseDatePtBRMonth(dateRaw, year) || parseDateSlash(dateRaw) || parseDateEN(dateRaw);
     if (!date || isNaN(date.getTime())) continue;
     const views    = num(col(row, 'Video Views', 'Visualizações de vídeo', 'Views'));
+    const profileViews = num(col(row, 'Profile Views', 'Visualizações de perfil'));
     const likes    = num(col(row, 'Likes', 'Curtidas'));
     const comments = num(col(row, 'Comments', 'Comentários'));
     const shares   = num(col(row, 'Shares', 'Compartilhamentos'));
     const er       = calcER(likes, comments, shares, views > BigInt(0) ? views : BigInt(1));
-    result.push({ date, views, reach: BigInt(0), impressions: views, likes, comments, shares, er });
+    result.push({ date, views, reach: profileViews, impressions: views, likes, comments, shares, er });
   }
   return result;
 }

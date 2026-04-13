@@ -87,17 +87,19 @@ export async function GET(req: NextRequest) {
     if (plt === 'tiktok' || plt === 'twitter') {
       const daily = await prisma.dailyMetric.findMany({
         where: { brandId, platform: plt, date: { gte: from, lt: to } },
-        select: { date: true, views: true, reach: true, likes: true, er: true, impressions: true },
+        select: { date: true, views: true, reach: true, likes: true, comments: true, shares: true, er: true, impressions: true },
         orderBy: { date: 'asc' },
       });
 
-      const byDay = new Map<string, { views: number; reach: number; likes: number; er: number; impressions: number }>();
+      const byDay = new Map<string, { views: number; reach: number; likes: number; comments: number; shares: number; er: number; impressions: number }>();
       for (const d of daily) {
         const k = dateKey(new Date(d.date));
         byDay.set(k, {
           views:       Number(d.views),
           reach:       Number(d.reach),
           likes:       Number(d.likes),
+          comments:    Number(d.comments),
+          shares:      Number(d.shares),
           er:          d.er,
           impressions: Number(d.impressions),
         });
@@ -115,6 +117,7 @@ export async function GET(req: NextRequest) {
           case 'reach':       values.push(day.reach);       break;
           case 'likes':       values.push(day.likes);       break;
           case 'impressions': values.push(day.impressions); break;
+          case 'engagement':  values.push(day.likes + day.comments + day.shares); break;
           default:            values.push(day.views);       break;
         }
       }
