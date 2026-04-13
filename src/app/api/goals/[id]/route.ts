@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// ─── PATCH /api/goals/[id] — atualiza uma meta ────────────────────────────────
-
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+// PATCH /api/goals/[id]
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { title, platform, kpi, current, expected, target, pct, expPct, status, deadline } = body;
 
     const goal = await prisma.goal.update({
       where: { id },
       data: {
-        ...(title    !== undefined && { }),
         ...(platform !== undefined && { platform: String(platform) }),
         ...(kpi      !== undefined && { kpi:      String(kpi) }),
         ...(target   !== undefined && { target:   String(target) }),
@@ -21,8 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ...(pct      !== undefined && { pct:      Number(pct) }),
         ...(expPct   !== undefined && { expPct:   Number(expPct) }),
         ...(deadline !== undefined && { deadline: deadline ? new Date(deadline) : null }),
-        // title tratado separado para evitar spread vazio
-        ...(title !== undefined && { title: String(title) }),
+        ...(title    !== undefined && { title:    String(title) }),
       },
     });
 
@@ -33,11 +30,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// ─── DELETE /api/goals/[id] ───────────────────────────────────────────────────
-
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+// DELETE /api/goals/[id]
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await prisma.goal.delete({ where: { id: params.id } });
+    const { id } = await params;
+    await prisma.goal.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[goals DELETE]', err);

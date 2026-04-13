@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { EntregaStatus } from '@prisma/client';
 
-// PATCH /api/entregas/[id] — atualiza status ou dados da entrega
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+// PATCH /api/entregas/[id]
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const body = await req.json();
     const { status, nome, investimento, metaCPV } = body;
 
     const entrega = await prisma.entrega.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(status      && { status:      status as EntregaStatus }),
         ...(nome        && { nome:        nome.trim() }),
@@ -27,9 +28,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/entregas/[id]
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await prisma.entrega.delete({ where: { id: params.id } });
+    const { id } = await params;
+    await prisma.entrega.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[entregas DELETE]', err);
