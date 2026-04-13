@@ -35,8 +35,8 @@ function AntroLogo() {
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const callbackUrl  = searchParams.get('callbackUrl') ?? '/';
-  const error        = searchParams.get('error');
+  const callbackUrl  = searchParams?.get('callbackUrl') ?? '/';
+  const error        = searchParams?.get('error');
 
   return (
     <div style={{
