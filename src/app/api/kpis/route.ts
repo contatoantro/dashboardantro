@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
     const results: Record<string, any> = {};
 
     for (const plt of platforms) {
-      const usesDaily = plt === 'tiktok' || plt === 'twitter';
+      const usesDaily = plt === 'tiktok';
 
       const [curr, prevData] = await Promise.all([
         usesDaily ? aggregateDaily(brandId, plt, from, to)       : aggregatePosts(brandId, plt, from, to),
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
 
       // Prev para overview
       const prevAll = await Promise.all(platforms.map(plt => {
-        const usesDaily = plt === 'tiktok' || plt === 'twitter';
+        const usesDaily = plt === 'tiktok';
         return usesDaily
           ? aggregateDaily(brandId, plt, prev.from, prev.to)
           : aggregatePosts(brandId, plt, prev.from, prev.to);

@@ -251,20 +251,43 @@ function parseYouTube(rows: Record<string, string>[]): ParsedRow[] {
   return result;
 }
 
-// Twitter CSV: "Date" ("Sat, Jan 31, 2026"), "Impressões", "Curtidas",
-// "Compartilhamentos", "Respostas", "Reposts"
-function parseTwitterDaily(rows: Record<string, string>[]): DailyRow[] {
-  const result: DailyRow[] = [];
+// Twitter CSV (por tweet): "ID do post", "Data" ("Sat, Jan 31, 2026"),
+// "Texto do post", "Postar link", "Impressões", "Curtidas", "Engajamentos",
+// "Itens salvos", "Compartilhamentos", "Respostas", "Reposts", "Visitas ao perfil"
+function parseTwitter(rows: Record<string, string>[]): ParsedRow[] {
+  const result: ParsedRow[] = [];
   for (const row of rows) {
-    const dateRaw = col(row, 'Date', 'Tweet date', 'Data');
+    const dateRaw = col(row, 'Data', 'Date', 'Tweet date');
     const date = parseDateEN(dateRaw);
     if (!date || isNaN(date.getTime())) continue;
+
+    const postId      = col(row, 'ID do post', 'Post ID');
+    const url         = col(row, 'Postar link', 'Post link');
     const impressions = num(col(row, 'Impressões', 'Impressions'));
     const likes       = num(col(row, 'Curtidas', 'Likes'));
-    const shares      = num(col(row, 'Compartilhamentos', 'Shares', 'Reposts', 'Retweets'));
-    const comments    = num(col(row, 'Respostas', 'Replies', 'Comments'));
-    const er          = calcER(likes, comments, shares, impressions > BigInt(0) ? impressions : BigInt(1));
-    result.push({ date, views: impressions, reach: BigInt(0), impressions, likes, comments, shares, er });
+    const saves       = num(col(row, 'Itens salvos', 'Bookmarks'));
+    const shares      = num(col(row, 'Compartilhamentos', 'Shares'));
+    const comments    = num(col(row, 'Respostas', 'Replies'));
+    const reposts     = num(col(row, 'Reposts', 'Retweets'));
+    const profileViews = num(col(row, 'Visitas ao perfil', 'Profile visits'));
+    const title       = col(row, 'Texto do post', 'Tweet text');
+    const totalShares = shares + reposts; // soma compartilhamentos + reposts
+    const er          = calcER(likes, comments, totalShares, impressions > BigInt(0) ? impressions : BigInt(1));
+    const externalId  = postId || url || `tw_${dateRaw}_${Number(likes)}`;
+
+    result.push({
+      externalId, date,
+      views: impressions, likes, comments,
+      shares: totalShares,
+      reach: profileViews,
+      saves,
+      impressions,
+      er,
+      postType: 'Tweet',
+      title: title ? title.slice(0, 100) : undefined,
+      url: url || undefined,
+      watchTimeSec: BigInt(0),
+    });
   }
   return result;
 }
@@ -344,9 +367,10 @@ export async function POST(req: NextRequest) {
     let rowsSkip = 0;
     let lastError = '';
 
-    if (plt === 'instagram' || plt === 'youtube' || plt === 'facebook') {
+    if (plt === 'instagram' || plt === 'youtube' || plt === 'facebook' || plt === 'twitter') {
       const parser = plt === 'instagram' ? parseInstagram
                    : plt === 'youtube'   ? parseYouTube
+                   : plt === 'twitter'   ? parseTwitter
                    : parseFacebook;
       const parsed = parser(rows);
       rowsSkip = rows.length - parsed.length;
@@ -393,9 +417,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (plt === 'tiktok' || plt === 'twitter') {
-      const parser = plt === 'tiktok' ? parseTikTokDaily : parseTwitterDaily;
-      const parsed = parser(rows);
+    if (plt === 'tiktok') {
+      const parsed = parseTikTokDaily(rows);
       rowsSkip = rows.length - parsed.length;
       console.log(`[import] ${plt}: ${rows.length} raw rows → ${parsed.length} parsed`);
 

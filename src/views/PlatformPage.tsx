@@ -103,18 +103,19 @@ const PLT_CONFIG = {
   },
   twitter: {
     label: 'Twitter/X', color: '#1DA1F2',
-    note: 'Twitter/X não fornece dados por tweet individual via exportação CSV. Exibindo métricas diárias.',
+    note: null,
     kpis: [
-      { label: 'Seguidores',  fmtKey: 'followers',    deltaKey: 'followers', isER: false },
-      { label: 'Impressões',  fmtKey: 'views',        deltaKey: 'views',     isER: false },
-      { label: 'Alcance',     fmtKey: 'reach',        deltaKey: 'reach',     isER: false },
-      { label: 'ER',          fmtKey: 'er',           deltaKey: 'er',        isER: true  },
-      { label: 'Tweets',      fmtKey: 'posts',        deltaKey: 'posts',     isER: false },
+      { label: 'Seguidores',      fmtKey: 'followers', deltaKey: 'followers', isER: false },
+      { label: 'Impressões',      fmtKey: 'views',     deltaKey: 'views',     isER: false },
+      { label: 'Visitas ao perfil', fmtKey: 'reach',   deltaKey: 'reach',     isER: false },
+      { label: 'ER',              fmtKey: 'er',        deltaKey: 'er',        isER: true  },
+      { label: 'Tweets',          fmtKey: 'posts',     deltaKey: 'posts',     isER: false },
     ],
     charts: [
-      { id: 'impressions', metric: 'impressions', title: 'Impressões diárias',   span: 3, type: 'line' },
-      { id: 'er',          metric: 'er',          title: 'Engagement Rate (%)',   span: 3, type: 'line' },
-      { id: 'retweets',    metric: 'likes',       title: 'Retweets & Curtidas',   span: 6, type: 'line' },
+      { id: 'impressions',  metric: 'views',      title: 'Impressões ao longo do tempo',             span: 3, type: 'line' },
+      { id: 'er',           metric: 'er',          title: 'Engagement Rate (%)',                       span: 3, type: 'line' },
+      { id: 'engagement',   metric: 'engagement',  title: 'Engajamento (Curtidas + Reposts + Shares)', span: 3, type: 'line' },
+      { id: 'profile',      metric: 'reach',       title: 'Visitas ao Perfil',                        span: 3, type: 'line' },
     ],
   },
   facebook: {

@@ -43,21 +43,24 @@ export async function GET(req: NextRequest) {
     const dates = dateRange(from, to);
 
     // ── Posts individuais ──
-    if (plt === 'instagram' || plt === 'youtube' || plt === 'facebook') {
+    if (plt === 'instagram' || plt === 'youtube' || plt === 'facebook' || plt === 'twitter') {
       const posts = await prisma.post.findMany({
         where: { brandId, platform: plt, date: { gte: from, lt: to } },
-        select: { date: true, views: true, reach: true, likes: true, comments: true, er: true, watchTimeSec: true },
+        select: { date: true, views: true, reach: true, likes: true, comments: true, shares: true, saves: true, er: true, watchTimeSec: true },
         orderBy: { date: 'asc' },
       });
 
-      const byDay = new Map<string, { views: number; reach: number; likes: number; er: number; watchTimeH: number; count: number }>();
+      const byDay = new Map<string, { views: number; reach: number; likes: number; comments: number; shares: number; saves: number; er: number; watchTimeH: number; count: number }>();
       for (const p of posts) {
         const k = dateKey(new Date(p.date));
-        const prev = byDay.get(k) ?? { views: 0, reach: 0, likes: 0, er: 0, watchTimeH: 0, count: 0 };
+        const prev = byDay.get(k) ?? { views: 0, reach: 0, likes: 0, comments: 0, shares: 0, saves: 0, er: 0, watchTimeH: 0, count: 0 };
         byDay.set(k, {
           views:      prev.views      + Number(p.views),
           reach:      prev.reach      + Number(p.reach),
           likes:      prev.likes      + Number(p.likes),
+          comments:   prev.comments   + Number(p.comments),
+          shares:     prev.shares     + Number(p.shares),
+          saves:      prev.saves      + Number(p.saves),
           er:         prev.er         + p.er,
           watchTimeH: prev.watchTimeH + Math.round(Number(p.watchTimeSec ?? 0) / 3600),
           count:      prev.count      + 1,
@@ -75,6 +78,9 @@ export async function GET(req: NextRequest) {
           case 'er':         values.push(day.count > 0 ? Math.round((day.er / day.count) * 100) / 100 : 0); break;
           case 'reach':      values.push(day.reach); break;
           case 'likes':      values.push(day.likes); break;
+          case 'shares':     values.push(day.shares); break;
+          case 'saves':      values.push(day.saves); break;
+          case 'engagement': values.push(day.likes + day.comments + day.shares); break;
           case 'watch_time': values.push(day.watchTimeH); break;
           default:           values.push(day.views); break;
         }
@@ -84,7 +90,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Métricas diárias ──
-    if (plt === 'tiktok' || plt === 'twitter') {
+    if (plt === 'tiktok') {
       const daily = await prisma.dailyMetric.findMany({
         where: { brandId, platform: plt, date: { gte: from, lt: to } },
         select: { date: true, views: true, reach: true, likes: true, comments: true, shares: true, er: true, impressions: true },
