@@ -433,3 +433,141 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Erro interno no servidor.', debug: String(err).slice(0, 200) }, { status: 500 });
   }
 }
+
+// GET /api/import — lista histórico de importações
+export async function GET(req: NextRequest) {
+  try {
+    const unauth = await requireAuth();
+    if (unauth) return unauth;
+
+    const { searchParams } = new URL(req.url);
+    const brandId = searchParams.get('brandId');
+
+    if (!brandId) {
+      return NextResponse.json({ error: 'brandId obrigatório' }, { status: 400 });
+    }
+
+    const logs = await prisma.importLog.findMany({
+      where: { brandId },
+      orderBy: { importedAt: 'desc' },
+      take: 50,
+    });
+
+    return NextResponse.json({ ok: true, logs });
+  } catch (err) {
+    console.error('[import GET] erro:', err);
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+  }
+}
+
+// DELETE /api/import — limpar dados importados
+// Modos:
+//   ?mode=platform&brandId=X&platform=instagram  → apaga posts/daily de uma plataforma
+//   ?mode=log&importLogId=X                       → desfaz uma importação específica
+//   ?mode=brand&brandId=X                         → apaga TODOS os dados de uma marca
+export async function DELETE(req: NextRequest) {
+  try {
+    const unauth = await requireAuth();
+    if (unauth) return unauth;
+
+    const { searchParams } = new URL(req.url);
+    const mode = searchParams.get('mode');
+
+    if (!mode || !['platform', 'log', 'brand'].includes(mode)) {
+      return NextResponse.json({ error: 'mode obrigatório: platform | log | brand' }, { status: 400 });
+    }
+
+    // ── Modo 1: por plataforma ──────────────────────────────────────────────
+    if (mode === 'platform') {
+      const brandId  = searchParams.get('brandId');
+      const platform = searchParams.get('platform');
+
+      if (!brandId || !platform) {
+        return NextResponse.json({ error: 'brandId e platform obrigatórios' }, { status: 400 });
+      }
+      if (!Object.values(Platform).includes(platform as Platform)) {
+        return NextResponse.json({ error: `Plataforma inválida: ${platform}` }, { status: 400 });
+      }
+
+      const plt = platform as Platform;
+      const postsDeleted = await prisma.post.deleteMany({ where: { brandId, platform: plt } });
+      const dailyDeleted = await prisma.dailyMetric.deleteMany({ where: { brandId, platform: plt } });
+      const logsDeleted  = await prisma.importLog.deleteMany({ where: { brandId, platform: plt } });
+
+      return NextResponse.json({
+        ok: true, mode: 'platform', platform,
+        deleted: { posts: postsDeleted.count, dailyMetrics: dailyDeleted.count, importLogs: logsDeleted.count },
+      });
+    }
+
+    // ── Modo 2: por importação (log) ────────────────────────────────────────
+    if (mode === 'log') {
+      const importLogId = searchParams.get('importLogId');
+      if (!importLogId) {
+        return NextResponse.json({ error: 'importLogId obrigatório' }, { status: 400 });
+      }
+
+      const log = await prisma.importLog.findUnique({ where: { id: importLogId } });
+      if (!log) {
+        return NextResponse.json({ error: 'ImportLog não encontrado' }, { status: 404 });
+      }
+
+      const importedAt = log.importedAt;
+      const windowStart = new Date(importedAt.getTime() - 5000);
+      const windowEnd   = new Date(importedAt.getTime() + 120000);
+
+      let deleted = 0;
+
+      if (['instagram', 'youtube', 'facebook'].includes(log.platform)) {
+        const result = await prisma.post.deleteMany({
+          where: {
+            brandId: log.brandId,
+            platform: log.platform,
+            createdAt: { gte: windowStart, lte: windowEnd },
+          },
+        });
+        deleted = result.count;
+      } else {
+        const result = await prisma.dailyMetric.deleteMany({
+          where: { brandId: log.brandId, platform: log.platform },
+        });
+        deleted = result.count;
+      }
+
+      await prisma.importLog.delete({ where: { id: importLogId } });
+
+      return NextResponse.json({
+        ok: true, mode: 'log', importLogId,
+        deleted: { records: deleted, importLog: 1 },
+      });
+    }
+
+    // ── Modo 3: tudo de uma marca ───────────────────────────────────────────
+    if (mode === 'brand') {
+      const brandId = searchParams.get('brandId');
+      if (!brandId) {
+        return NextResponse.json({ error: 'brandId obrigatório' }, { status: 400 });
+      }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId } });
+      if (!brand) {
+        return NextResponse.json({ error: 'Brand não encontrada' }, { status: 404 });
+      }
+
+      const posts     = await prisma.post.deleteMany({ where: { brandId } });
+      const daily     = await prisma.dailyMetric.deleteMany({ where: { brandId } });
+      const followers = await prisma.followerSnapshot.deleteMany({ where: { brandId } });
+      const logs      = await prisma.importLog.deleteMany({ where: { brandId } });
+
+      return NextResponse.json({
+        ok: true, mode: 'brand', brandId, brandName: brand.name,
+        deleted: { posts: posts.count, dailyMetrics: daily.count, followers: followers.count, importLogs: logs.count },
+      });
+    }
+
+    return NextResponse.json({ error: 'Modo inválido' }, { status: 400 });
+  } catch (err) {
+    console.error('[import DELETE] erro:', err);
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+  }
+}

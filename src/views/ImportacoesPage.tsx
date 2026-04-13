@@ -16,11 +16,11 @@ const PLATFORMS = {
 type PlatformKey = keyof typeof PLATFORMS;
 
 const KNOWN_COLS: Record<PlatformKey, string[]> = {
-  instagram: ['Conta', 'Data', 'Alcance', 'Impressões', 'Curtidas', 'Comentários', 'Compartilhamentos', 'Salvamentos', 'Tipo de publicação'],
-  tiktok:    ['Data', 'Visualizações de vídeo', 'Curtidas', 'Comentários', 'Compartilhamentos'],
-  youtube:   ['Título do vídeo', 'Visualizações', 'Tempo de exibição', 'Impressões', 'CTR'],
-  twitter:   ['Tweet date', 'Impressions', 'Engagements', 'Likes', 'Retweets'],
-  facebook:  ['Post ID', 'Tipo de postagem', 'Alcance', 'Reações'],
+  instagram: ['Identificação do post', 'Horário de publicação', 'Alcance', 'Visualizações', 'Curtidas', 'Comentários', 'Compartilhamentos', 'Salvamentos', 'Tipo de post'],
+  tiktok:    ['Date', 'Video Views', 'Likes', 'Comments', 'Shares'],
+  youtube:   ['Título do vídeo', 'Horário de publicação do vídeo', 'Visualizações', 'Marcações "Gostei"', 'Impressões'],
+  twitter:   ['Date', 'Impressões', 'Curtidas', 'Respostas', 'Reposts'],
+  facebook:  ['Identificação do post', 'Horário de publicação', 'Alcance', 'Reações', 'Comentários'],
 };
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -45,6 +45,17 @@ interface FollowerSnap {
   recordedAt: string | null;
 }
 
+interface ImportLogEntry {
+  id:         string;
+  platform:   string;
+  filename:   string;
+  rowsTotal:  number;
+  rowsOk:     number;
+  rowsSkip:   number;
+  status:     string;
+  importedAt: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function isColKnown(header: string, platform: PlatformKey): boolean {
@@ -65,6 +76,12 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
 // ─── Seção de Seguidores ──────────────────────────────────────────────────────
 
 function FollowersSection({ brandId, noBrand }: { brandId: string; noBrand: boolean }) {
@@ -76,7 +93,6 @@ function FollowersSection({ brandId, noBrand }: { brandId: string; noBrand: bool
   const [saving,    setSaving]    = useState<PlatformKey | null>(null);
   const [savedMsg,  setSavedMsg]  = useState<Partial<Record<PlatformKey, string>>>({});
 
-  // Fetch snapshots atuais
   const fetchSnaps = useCallback(async () => {
     if (noBrand) { setLoading(false); return; }
     setLoading(true);
@@ -189,7 +205,7 @@ function FollowersSection({ brandId, noBrand }: { brandId: string; noBrand: bool
 
 // ─── Seção de CSV Upload ──────────────────────────────────────────────────────
 
-function CsvSection({ brandId, brandName, noBrand }: { brandId: string; brandName: string; noBrand: boolean }) {
+function CsvSection({ brandId, brandName, noBrand, onDataChanged }: { brandId: string; brandName: string; noBrand: boolean; onDataChanged: () => void }) {
   const [activePlatform, setActivePlatform] = useState<PlatformKey>('instagram');
   const [preview,        setPreview]        = useState<CsvPreview | null>(null);
   const [status,         setStatus]         = useState<CsvStatus>({ type: 'idle' });
@@ -249,6 +265,7 @@ function CsvSection({ brandId, brandName, noBrand }: { brandId: string; brandNam
       if (!res.ok) { setStatus({ type: 'error', message: json.error ?? 'Erro desconhecido.' }); return; }
       setStatus({ type: 'success', message: `✓ ${preview.filename} importado para ${brandName} · ${PLATFORMS[activePlatform].label}`, rowsOk: json.rowsOk, rowsSkip: json.rowsSkip });
       setPreview(null);
+      onDataChanged();
     } catch (err) {
       setStatus({ type: 'error', message: `Erro de conexão: ${String(err)}` });
     }
@@ -410,11 +427,223 @@ function CsvSection({ brandId, brandName, noBrand }: { brandId: string; brandNam
   );
 }
 
+// ─── Seção de Gerenciamento de Dados ──────────────────────────────────────────
+
+function DataManagementSection({ brandId, brandName, noBrand, refreshKey }: { brandId: string; brandName: string; noBrand: boolean; refreshKey: number }) {
+  const [logs, setLogs] = useState<ImportLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null); // 'platform:ig' | 'log:id' | 'brand'
+  const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fetchLogs = useCallback(async () => {
+    if (noBrand) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/import?brandId=${brandId}`);
+      if (res.ok) {
+        const json = await res.json();
+        setLogs(json.logs ?? []);
+      }
+    } catch { /* silencioso */ }
+    setLoading(false);
+  }, [brandId, noBrand]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs, refreshKey]);
+
+  async function deleteByPlatform(platform: PlatformKey) {
+    const plt = PLATFORMS[platform];
+    if (!confirm(`Apagar TODOS os dados de ${plt.label} da marca "${brandName}"?\n\nIsso inclui posts, métricas diárias e logs de importação desta plataforma.`)) return;
+
+    setDeleting(`platform:${platform}`);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/import?mode=platform&brandId=${brandId}&platform=${platform}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) { setResult({ type: 'error', message: json.error }); return; }
+      const d = json.deleted;
+      setResult({ type: 'success', message: `${plt.label}: ${d.posts ?? 0} posts + ${d.dailyMetrics ?? 0} métricas diárias removidos` });
+      fetchLogs();
+    } catch (e) {
+      setResult({ type: 'error', message: String(e) });
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  async function deleteByLog(logEntry: ImportLogEntry) {
+    const plt = PLATFORMS[logEntry.platform as PlatformKey];
+    if (!confirm(`Desfazer importação "${logEntry.filename}"?\n\n${plt?.label ?? logEntry.platform} · ${logEntry.rowsOk} registros serão removidos.`)) return;
+
+    setDeleting(`log:${logEntry.id}`);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/import?mode=log&importLogId=${logEntry.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) { setResult({ type: 'error', message: json.error }); return; }
+      setResult({ type: 'success', message: `Importação "${logEntry.filename}" desfeita — ${json.deleted.records} registros removidos` });
+      fetchLogs();
+    } catch (e) {
+      setResult({ type: 'error', message: String(e) });
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  async function deleteAllBrand() {
+    if (!confirm(`⚠ ATENÇÃO: Apagar TODOS os dados da marca "${brandName}"?\n\nIsso inclui posts, métricas, seguidores e logs de TODAS as plataformas.\n\nEssa ação não pode ser desfeita.`)) return;
+    if (!confirm(`Tem certeza? Digite o nome da marca para confirmar.\n\n(Clique OK para prosseguir)`)) return;
+
+    setDeleting('brand');
+    setResult(null);
+    try {
+      const res = await fetch(`/api/import?mode=brand&brandId=${brandId}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) { setResult({ type: 'error', message: json.error }); return; }
+      const d = json.deleted;
+      setResult({ type: 'success', message: `"${brandName}" limpa: ${d.posts} posts, ${d.dailyMetrics} métricas, ${d.followers} snapshots, ${d.importLogs} logs removidos` });
+      fetchLogs();
+    } catch (e) {
+      setResult({ type: 'error', message: String(e) });
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  const btnStyle: React.CSSProperties = {
+    padding: '5px 10px', borderRadius: 'var(--radius)',
+    border: '1px solid var(--border2)', background: 'transparent',
+    fontFamily: 'var(--font)', fontSize: 10, fontWeight: 500, cursor: 'pointer',
+    transition: 'all .12s',
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 14 }}>
+        Gerenciar Dados Importados
+      </div>
+
+      {/* Resultado de operação */}
+      {result && (
+        <div style={{
+          marginBottom: 14, padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 11.5, fontWeight: 500,
+          background: result.type === 'success' ? 'rgba(74,222,128,.08)' : 'rgba(239,68,68,.08)',
+          border: `1px solid ${result.type === 'success' ? 'rgba(74,222,128,.2)' : 'rgba(239,68,68,.2)'}`,
+          color: result.type === 'success' ? '#4ade80' : '#ef4444',
+        }}>
+          {result.message}
+        </div>
+      )}
+
+      {/* Limpar por plataforma */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '18px 20px', marginBottom: 12 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>Limpar por plataforma</div>
+        <p style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 450, marginBottom: 14, lineHeight: 1.5 }}>
+          Remove todos os posts e métricas de uma plataforma específica da marca ativa.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {(Object.entries(PLATFORMS) as [PlatformKey, typeof PLATFORMS[PlatformKey]][]).map(([key, p]) => (
+            <button
+              key={key}
+              onClick={() => deleteByPlatform(key)}
+              disabled={noBrand || deleting !== null}
+              style={{
+                ...btnStyle,
+                color: '#ef4444', borderColor: 'rgba(239,68,68,.2)',
+                opacity: (noBrand || deleting !== null) ? 0.4 : 1,
+                cursor: (noBrand || deleting !== null) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {deleting === `platform:${key}` ? '...' : `✕ ${p.label}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Histórico de importações */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '18px 20px', marginBottom: 12 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>Histórico de importações</div>
+        <p style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 450, marginBottom: 14, lineHeight: 1.5 }}>
+          Desfaça uma importação específica removendo os registros associados.
+        </p>
+
+        {loading && <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 450 }}>Carregando...</div>}
+
+        {!loading && logs.length === 0 && (
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 450 }}>Nenhuma importação registrada.</div>
+        )}
+
+        {!loading && logs.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {logs.map(log => {
+              const plt = PLATFORMS[log.platform as PlatformKey];
+              const isDeleting = deleting === `log:${log.id}`;
+              return (
+                <div key={log.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 14px', borderRadius: 'var(--radius)',
+                  background: 'var(--bg-card2)', border: '1px solid var(--border)',
+                }}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                    background: log.status === 'OK' ? '#4ade80' : log.status === 'PARTIAL' ? '#f59e0b' : '#ef4444',
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 550, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {log.filename}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 450, marginTop: 2 }}>
+                      {plt?.label ?? log.platform} · {log.rowsOk} salvas · {log.rowsSkip} ignoradas · {fmtDateTime(log.importedAt)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => deleteByLog(log)}
+                    disabled={deleting !== null}
+                    style={{
+                      ...btnStyle, color: '#ef4444', borderColor: 'rgba(239,68,68,.2)',
+                      opacity: deleting !== null ? 0.4 : 1,
+                      cursor: deleting !== null ? 'not-allowed' : 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isDeleting ? '...' : 'Desfazer'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Limpar tudo da marca */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(239,68,68,.15)', borderRadius: 'var(--radius)', padding: '18px 20px' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: '#ef4444', marginBottom: 4 }}>Limpar todos os dados</div>
+        <p style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 450, marginBottom: 14, lineHeight: 1.5 }}>
+          Remove TODOS os posts, métricas, seguidores e logs de importação da marca &quot;{brandName}&quot;. Essa ação não pode ser desfeita.
+        </p>
+        <button
+          onClick={deleteAllBrand}
+          disabled={noBrand || deleting !== null}
+          style={{
+            padding: '8px 16px', borderRadius: 'var(--radius)',
+            border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)',
+            color: '#ef4444', fontFamily: 'var(--font)', fontSize: 11.5, fontWeight: 600,
+            cursor: (noBrand || deleting !== null) ? 'not-allowed' : 'pointer',
+            opacity: (noBrand || deleting !== null) ? 0.4 : 1,
+          }}
+        >
+          {deleting === 'brand' ? '⏳ Removendo...' : `✕ Limpar todos os dados de "${brandName}"`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function ImportacoesPage() {
   const { currentBrandId, currentBrand } = useApp();
   const noBrand = currentBrandId.startsWith('__');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -429,7 +658,11 @@ export default function ImportacoesPage() {
 
       <div style={{ height: 1, background: 'var(--border)' }} />
 
-      <CsvSection brandId={currentBrandId} brandName={currentBrand.name} noBrand={noBrand} />
+      <CsvSection brandId={currentBrandId} brandName={currentBrand.name} noBrand={noBrand} onDataChanged={() => setRefreshKey(k => k + 1)} />
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      <DataManagementSection brandId={currentBrandId} brandName={currentBrand.name} noBrand={noBrand} refreshKey={refreshKey} />
     </div>
   );
 }
