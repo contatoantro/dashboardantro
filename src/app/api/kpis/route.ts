@@ -118,6 +118,9 @@ export async function GET(req: NextRequest) {
 
       const followers = await getLatestFollowers(brandId, plt);
 
+      const wtCurr = 'watchTimeSec' in curr ? Math.round((curr as any).watchTimeSec / 3600) : 0;
+      const wtPrev = 'watchTimeSec' in prevData ? Math.round((prevData as any).watchTimeSec / 3600) : 0;
+
       results[plt] = {
         views:     curr.views,
         reach:     curr.reach,
@@ -126,7 +129,7 @@ export async function GET(req: NextRequest) {
         shares:    curr.shares,
         posts:     curr.posts,
         er:        curr.er,
-        watchTimeH: Math.round((curr.watchTimeSec ?? 0) / 3600),
+        watchTimeH: wtCurr,
         followers,
         fmt: {
           views:     fmtNumber(curr.views),
@@ -137,7 +140,7 @@ export async function GET(req: NextRequest) {
           posts:     fmtNumber(curr.posts),
           er:        `${curr.er.toFixed(2)}%`,
           followers: fmtNumber(followers),
-          watchTimeH: fmtNumber(Math.round((curr.watchTimeSec ?? 0) / 3600)),
+          watchTimeH: fmtNumber(wtCurr),
         },
         delta: {
           views:    delta(curr.views,    prevData.views),
@@ -145,7 +148,7 @@ export async function GET(req: NextRequest) {
           likes:    delta(curr.likes,    prevData.likes),
           posts:    delta(curr.posts,    prevData.posts),
           er:       `${(curr.er - prevData.er) >= 0 ? '+' : ''}${(curr.er - prevData.er).toFixed(2)}pp`,
-          watchTimeH: delta(Math.round((curr.watchTimeSec ?? 0) / 3600), Math.round((prevData.watchTimeSec ?? 0) / 3600)),
+          watchTimeH: delta(wtCurr, wtPrev),
           followers: '—',
         },
         hasData: curr.views > 0 || curr.posts > 0,
