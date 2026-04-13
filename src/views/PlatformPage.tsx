@@ -88,17 +88,17 @@ const PLT_CONFIG = {
     label: 'YouTube', color: '#FF0000',
     note: null,
     kpis: [
-      { label: 'Inscritos',   fmtKey: 'followers', deltaKey: 'followers', isER: false },
-      { label: 'Views',       fmtKey: 'views',     deltaKey: 'views',     isER: false },
-      { label: 'Watch Time',  fmtKey: 'reach',     deltaKey: 'reach',     isER: false }, // reach ≈ watch time no YT
-      { label: 'ER',          fmtKey: 'er',        deltaKey: 'er',        isER: true  },
-      { label: 'Vídeos',      fmtKey: 'posts',     deltaKey: 'posts',     isER: false },
+      { label: 'Inscritos',   fmtKey: 'followers',  deltaKey: 'followers',  isER: false },
+      { label: 'Views',       fmtKey: 'views',      deltaKey: 'views',      isER: false },
+      { label: 'Watch Time',  fmtKey: 'watchTimeH', deltaKey: 'watchTimeH', isER: false },
+      { label: 'ER',          fmtKey: 'er',         deltaKey: 'er',         isER: true  },
+      { label: 'Vídeos',      fmtKey: 'posts',      deltaKey: 'posts',      isER: false },
     ],
     charts: [
-      { id: 'views',      metric: 'views', title: 'Views ao longo do tempo',    span: 3, type: 'line' },
-      { id: 'er',         metric: 'er',    title: 'Engagement Rate (%)',         span: 3, type: 'line' },
-      { id: 'watch_time', metric: 'reach', title: 'Watch Time (h)',              span: 3, type: 'line' },
-      { id: 'subs',       metric: 'likes', title: 'Crescimento de inscritos',    span: 3, type: 'line' },
+      { id: 'views',      metric: 'views',      title: 'Views ao longo do tempo',    span: 3, type: 'line' },
+      { id: 'er',         metric: 'er',          title: 'Engagement Rate (%)',         span: 3, type: 'line' },
+      { id: 'watch_time', metric: 'watch_time',  title: 'Watch Time (h)',              span: 3, type: 'line' },
+      { id: 'subs',       metric: 'likes',       title: 'Crescimento de inscritos',    span: 3, type: 'line' },
     ],
   },
   twitter: {

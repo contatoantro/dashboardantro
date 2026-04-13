@@ -27,18 +27,19 @@ function prevRange(from: Date, to: Date): { from: Date; to: Date } {
 async function aggregatePosts(brandId: string, platform: Platform, from: Date, to: Date) {
   const r = await prisma.post.aggregate({
     where: { brandId, platform, date: { gte: from, lt: to } },
-    _sum:   { views: true, likes: true, comments: true, shares: true, reach: true, saves: true },
+    _sum:   { views: true, likes: true, comments: true, shares: true, reach: true, saves: true, watchTimeSec: true },
     _count: { id: true },
     _avg:   { er: true },
   });
   return {
-    views:    Number(r._sum.views    ?? 0),
-    likes:    Number(r._sum.likes    ?? 0),
-    comments: Number(r._sum.comments ?? 0),
-    shares:   Number(r._sum.shares   ?? 0),
-    reach:    Number(r._sum.reach    ?? 0),
-    posts:    r._count.id,
-    er:       r._avg.er ?? 0,
+    views:        Number(r._sum.views        ?? 0),
+    likes:        Number(r._sum.likes        ?? 0),
+    comments:     Number(r._sum.comments     ?? 0),
+    shares:       Number(r._sum.shares       ?? 0),
+    reach:        Number(r._sum.reach        ?? 0),
+    watchTimeSec: Number(r._sum.watchTimeSec ?? 0),
+    posts:        r._count.id,
+    er:           r._avg.er ?? 0,
   };
 }
 
@@ -125,6 +126,7 @@ export async function GET(req: NextRequest) {
         shares:    curr.shares,
         posts:     curr.posts,
         er:        curr.er,
+        watchTimeH: Math.round((curr.watchTimeSec ?? 0) / 3600),
         followers,
         fmt: {
           views:     fmtNumber(curr.views),
@@ -135,6 +137,7 @@ export async function GET(req: NextRequest) {
           posts:     fmtNumber(curr.posts),
           er:        `${curr.er.toFixed(2)}%`,
           followers: fmtNumber(followers),
+          watchTimeH: fmtNumber(Math.round((curr.watchTimeSec ?? 0) / 3600)),
         },
         delta: {
           views:    delta(curr.views,    prevData.views),
@@ -142,6 +145,7 @@ export async function GET(req: NextRequest) {
           likes:    delta(curr.likes,    prevData.likes),
           posts:    delta(curr.posts,    prevData.posts),
           er:       `${(curr.er - prevData.er) >= 0 ? '+' : ''}${(curr.er - prevData.er).toFixed(2)}pp`,
+          watchTimeH: delta(Math.round((curr.watchTimeSec ?? 0) / 3600), Math.round((prevData.watchTimeSec ?? 0) / 3600)),
           followers: '—',
         },
         hasData: curr.views > 0 || curr.posts > 0,
