@@ -274,6 +274,7 @@ export async function POST(req: NextRequest) {
   try {
     const unauth = await requireAuth();
     if (unauth) return unauth;
+    const formData = await req.formData();
     const file     = formData.get('file') as File | null;
     const brandId  = formData.get('brandId') as string | null;
     const platform = formData.get('platform') as string | null;
