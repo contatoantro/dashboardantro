@@ -184,7 +184,7 @@ function parseInstagram(rows: Record<string, string>[]): ParsedRow[] {
     const postType    = col(row, 'Tipo de post');
     const url         = col(row, 'Link permanente');
     const postId      = col(row, 'Identificação do post');
-    const er          = calcER(likes, comments, shares, reach > BigInt(0) ? reach : BigInt(1));
+    const er          = calcER(likes, comments, shares, reach > BigInt(0) ? reach : impressions > BigInt(0) ? impressions : BigInt(1));
     const externalId  = postId || url || `ig_${datetimeRaw}_${Number(likes)}`;
 
     result.push({
@@ -315,7 +315,7 @@ function parseFacebook(rows: Record<string, string>[]): ParsedRow[] {
     const shares     = num(col(row, 'Compartilhamentos', 'Shares'));
     const url        = col(row, 'Link permanente', 'Permalink');
     const externalId = postId || url || `fb_${datetimeRaw}_${Number(likes)}`;
-    const er         = calcER(likes, comments, shares, reach > BigInt(0) ? reach : BigInt(1));
+    const er         = calcER(likes, comments, shares, reach > BigInt(0) ? reach : views > BigInt(0) ? views : BigInt(1));
 
     result.push({
       externalId, date, publishedAt: publishedAt ?? undefined,
