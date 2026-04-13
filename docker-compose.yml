@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: antro_db
+    restart: always
+    environment:
+      POSTGRES_USER: antro
+      POSTGRES_PASSWORD: antro2026
+      POSTGRES_DB: antro
+    ports:
+      - "5432:5432"
+    volumes:
+      - antro_data:/var/lib/postgresql/data
+
+volumes:
+  antro_data:

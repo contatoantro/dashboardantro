@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Antro Dashboard
 
-## Getting Started
+Dashboard interno de analytics para social media — gerencia múltiplas marcas de memes (South America Memes, Brazilposting, Lixeira Memes) com dados de Instagram, TikTok, YouTube, Twitter/X e Facebook.
 
-First, run the development server:
+## Stack
+
+- **Frontend:** Next.js 16 (App Router) + TypeScript + Tailwind + Recharts
+- **Backend:** PostgreSQL 16 + Prisma ORM
+- **Auth:** NextAuth v5 — login exclusivo via Google (@antro.ag)
+- **IA:** Anthropic Claude (insights automáticos)
+
+## Pré-requisitos
+
+- Node.js 20+
+- Docker Desktop
+
+## Como rodar
+
+### 1. Clonar e instalar dependências
+
+```bash
+git clone <repo>
+cd antro
+npm install
+```
+
+### 2. Configurar variáveis de ambiente
+
+Crie um arquivo `.env.local` na raiz com:
+
+```env
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=<gerar com: openssl rand -base64 32>
+GOOGLE_CLIENT_ID=<Google OAuth Client ID>
+GOOGLE_CLIENT_SECRET=<Google OAuth Client Secret>
+ANTHROPIC_API_KEY=<Anthropic API Key>
+```
+
+Crie também um `.env` na raiz com:
+
+```env
+DATABASE_URL="postgresql://antro:antro2026@localhost:5432/antro"
+```
+
+### 3. Subir o banco de dados
+
+```bash
+docker compose up -d
+```
+
+### 4. Rodar as migrations
+
+```bash
+npx prisma migrate deploy
+```
+
+### 5. Iniciar o servidor
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse: [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Importação de dados
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+A fonte primária de dados são CSVs exportados de cada plataforma. Acesse **Importações** no dashboard e faça upload do arquivo correspondente à plataforma.
 
-## Learn More
+Formatos suportados por plataforma:
 
-To learn more about Next.js, take a look at the following resources:
+| Plataforma | Tipo de dado | Formato de data |
+|---|---|---|
+| Instagram | Posts individuais | MM/DD/YYYY |
+| TikTok | Métricas diárias | pt-BR sem ano |
+| YouTube | Posts individuais | Jan 15, 2026 |
+| Twitter/X | Métricas diárias | en-US |
+| Facebook | Posts individuais | MM/DD/YYYY |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Variáveis de ambiente obrigatórias
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variável | Descrição |
+|---|---|
+| `NEXTAUTH_URL` | URL base da aplicação |
+| `NEXTAUTH_SECRET` | Secret para assinar JWTs |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID (Google Cloud) |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret |
+| `DATABASE_URL` | Connection string do PostgreSQL |
+| `ANTHROPIC_API_KEY` | API Key para insights com IA (opcional) |

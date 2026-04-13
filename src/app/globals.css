@@ -1,26 +1,185 @@
-@import "tailwindcss";
+/* ─── FONTE LOCAL ─────────────────────────────────────────────────────────────
+   Coloque os dois .ttf em:  antro/public/fonts/
+   ─────────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'InstrumentSans';
+  src: url('/fonts/InstrumentSans-VariableFont_wdth_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'InstrumentSans';
+  src: url('/fonts/InstrumentSans-Italic-VariableFont_wdth_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── TAILWIND v4: registra fonte como token ──────────────────────────────── */
+@theme {
+  --font-sans: 'InstrumentSans', 'Helvetica Neue', sans-serif;
+}
+
+/* ─── TOKENS GLOBAIS ──────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font: 'InstrumentSans', 'Helvetica Neue', sans-serif;
+  --sidebar-w: 220px;
+  --header-h:  56px;
+  --radius:    6px;
+  --radius-lg: 10px;
+
+  --ig: #E1306C;
+
+  /* escala tipográfica */
+  --fs-label: 11px;
+  --fs-body:  12px;
+  --fs-small: 10px;
+  --tt: #52c7cf;
+  --yt: #FF0000;
+  --tw: #1DA1F2;
+  --fb: #1877F2;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ─── TEMA ESCURO ─────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:        #0c0c0c;
+  --bg-card:   #141412;
+  --bg-card2:  #1c1c19;
+  --bg-card3:  #242420;
+
+  --text:       #f2eee5;
+  --text-muted: #5c5a55;
+  --text-dim:   #3a3935;
+
+  --border:  #232320;
+  --border2: #2c2c28;
+
+  --sb-bg:        #0c0c0c;
+  --sb-text:      #cdccca;
+  --sb-muted:     #3d3c38;
+  --sb-active-bg: rgba(242,238,229,.06);
+  --sb-active-bd: #f2eee5;
+  --sb-hover:     rgba(242,238,229,.03);
+
+  --tooltip-bg:   #141412;
+  --sk-base:      #141412;
+  --sk-shine:     #1c1c19;
+  --input-bg:     #141412;
+  --input-border: #232320;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── TEMA CLARO ──────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:        #f2eee5;
+  --bg-card:   #faf8f4;
+  --bg-card2:  #ece8df;
+  --bg-card3:  #e2ddd4;
+
+  /* texto com contraste forte */
+  --text:       #0c0c0c;
+  --text-muted: #4a4843;
+  --text-dim:   #8a8880;
+
+  --border:  #ccc8c0;
+  --border2: #bfbbb3;
+
+  /* sidebar mantém dark (343128) — funciona bem */
+  --sb-bg:        #343128;
+  --sb-text:      #f2eee5;
+  --sb-muted:     #8c8a82;
+  --sb-active-bg: rgba(242,238,229,.14);
+  --sb-active-bd: #f2eee5;
+  --sb-hover:     rgba(255,255,255,.06);
+
+  --tooltip-bg:   #0c0c0c;
+  --sk-base:      #e2ddd4;
+  --sk-shine:     #ece8df;
+  --input-bg:     #faf8f4;
+  --input-border: #ccc8c0;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ─── RESET ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  transition: background .2s, color .2s;
+}
+
+button { font-family: var(--font); cursor: pointer; }
+a { text-decoration: none; }
+
+/* ─── SCROLLBAR ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 2px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ─── SKELETON ────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+.sk {
+  background: linear-gradient(
+    90deg,
+    var(--sk-base) 25%,
+    var(--sk-shine) 50%,
+    var(--sk-base) 75%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.6s infinite;
+  border-radius: var(--radius);
+  opacity: .7;
+}
+
+/* ─── ANIMAÇÕES ───────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-7px); }
+  40%     { transform: translateX(7px); }
+  60%     { transform: translateX(-5px); }
+  80%     { transform: translateX(5px); }
+}
+
+.fade-in { animation: fadeIn .22s ease both; }
+
+/* ─── EMPTY STATE ─────────────────────────────────────────────────────────── */
+.empty-state {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.empty-icon  { font-size: 36px; opacity: .4; }
+.empty-title { font-size: 14px; font-weight: 650; color: var(--text-muted); }
+.empty-sub   {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 450;
+  max-width: 280px;
+  line-height: 1.6;
 }

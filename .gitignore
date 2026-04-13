@@ -30,7 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — nunca commitar secrets
 .env*
 
 # vercel
@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# prisma generated
+/src/generated/prisma
+
+# CSVs de dados — não pertencem ao repositório
+*.csv
+
+# Scripts de manutenção avulsos
+reimport.js
+reimport-youtube.js
+yt.js
+check-db.js

@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Marca de conteúdo ────────────────────────────────────────────────────────
+model Brand {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#4ade80")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  posts        Post[]
+  dailyMetrics DailyMetric[]
+  followers    FollowerSnapshot[]
+  importLogs   ImportLog[]
+  goals        Goal[]
+  entregas     Entrega[]
+  insights     Insight[]
+}
+
+// ─── Marca comercial (clientes de publi) ──────────────────────────────────────
+model MarcaComercial {
+  id        String   @id @default(cuid())
+  nome      String
+  cor       String   @default("#4ade80")
+  emoji     String   @default("🏷")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entregas Entrega[]
+}
+
+// ─── Post ─────────────────────────────────────────────────────────────────────
+model Post {
+  id          String    @id @default(cuid())
+  brandId     String
+  platform    Platform
+  date        DateTime
+  externalId  String?
+  publishedAt DateTime?
+
+  views       BigInt @default(0)
+  likes       BigInt @default(0)
+  comments    BigInt @default(0)
+  shares      BigInt @default(0)
+  reach       BigInt @default(0)
+  saves       BigInt @default(0)
+  impressions BigInt @default(0)
+  er          Float  @default(0)
+
+  postType     String?
+  title        String?
+  url          String?
+  watchTimeSec BigInt @default(0)
+  rawExtra     Json?
+
+  createdAt DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, platform, externalId])
+  @@index([brandId, platform, date])
+  @@index([brandId, date])
+}
+
+// ─── DailyMetric ─────────────────────────────────────────────────────────────
+model DailyMetric {
+  id        String   @id @default(cuid())
+  brandId   String
+  platform  Platform
+  date      DateTime @db.Date
+
+  views       BigInt @default(0)
+  reach       BigInt @default(0)
+  impressions BigInt @default(0)
+  likes       BigInt @default(0)
+  comments    BigInt @default(0)
+  shares      BigInt @default(0)
+  er          Float  @default(0)
+
+  createdAt DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, platform, date])
+  @@index([brandId, platform, date])
+}
+
+// ─── FollowerSnapshot ─────────────────────────────────────────────────────────
+model FollowerSnapshot {
+  id         String   @id @default(cuid())
+  brandId    String
+  platform   Platform
+  count      BigInt
+  recordedAt DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, platform, recordedAt])
+}
+
+// ─── ImportLog ────────────────────────────────────────────────────────────────
+model ImportLog {
+  id         String       @id @default(cuid())
+  brandId    String
+  platform   Platform
+  filename   String
+  rowsTotal  Int
+  rowsOk     Int
+  rowsSkip   Int
+  status     ImportStatus @default(OK)
+  errorMsg   String?
+  importedAt DateTime     @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, importedAt])
+}
+
+// ─── Goal ─────────────────────────────────────────────────────────────────────
+model Goal {
+  id        String    @id @default(cuid())
+  brandId   String
+  platform  String
+  kpi       String
+  target    String
+  current   String
+  expected  String
+  pct       Float
+  expPct    Float
+  deadline  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+}
+
+// ─── Setting ──────────────────────────────────────────────────────────────────
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+// ─── Entrega ──────────────────────────────────────────────────────────────────
+model Entrega {
+  id              String        @id @default(cuid())
+  brandId         String
+  marcaComercialId String?      // vínculo com marca comercial (opcional)
+  token           String        @unique @default(cuid())
+  tipo            EntregaTipo
+  nome            String
+  plataforma      String
+  investimento    Float
+  metaCPV         Float?
+  status          EntregaStatus @default(pendente)
+  criadaEm       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  brand          Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  marcaComercial MarcaComercial? @relation(fields: [marcaComercialId], references: [id], onDelete: SetNull)
+  posts          PostEntrega[]
+
+  @@index([brandId, criadaEm])
+  @@index([marcaComercialId])
+  @@index([token])
+}
+
+// ─── PostEntrega ──────────────────────────────────────────────────────────────
+model PostEntrega {
+  id                 String  @id @default(cuid())
+  entregaId          String
+  link               String
+  data               String
+  views              Int     @default(0)
+  alcance            Int     @default(0)
+  curtidas           Int     @default(0)
+  compartilhamentos  Int     @default(0)
+  salvamentos        Int     @default(0)
+  comentarios        Int     @default(0)
+
+  entrega Entrega @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+
+  @@index([entregaId])
+}
+
+// ─── Insight ──────────────────────────────────────────────────────────────────
+model Insight {
+  id         String   @id @default(cuid())
+  brandId    String
+  platform   String   // instagram | tiktok | youtube | twitter | facebook | overview
+  type       String   // performance | trend | alert | opportunity
+  title      String
+  body       String
+  delta      String   @default("")
+  deltaLabel String   @default("")
+  tag        String   @default("")
+  fromDate   DateTime
+  toDate     DateTime
+  createdAt  DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, createdAt])
+  @@index([brandId, fromDate, toDate])
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+enum Platform {
+  instagram
+  tiktok
+  youtube
+  twitter
+  facebook
+}
+
+enum ImportStatus {
+  OK
+  PARTIAL
+  ERROR
+}
+
+enum EntregaTipo {
+  post
+  campanha
+}
+
+enum EntregaStatus {
+  pendente
+  ativa
+  encerrada
+}
