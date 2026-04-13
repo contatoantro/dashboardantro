@@ -143,7 +143,7 @@ function parseDatePtBRMonth(value: string, inferYear?: number): Date | null {
     'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8,
     'outubro': 9, 'novembro': 10, 'dezembro': 11,
   };
-  const m = value.match(/^(\d{1,2})\s+de\s+(\w+)/i);
+  const m = value.match(/^(\d{1,2})\s+de\s+([\p{L}]+)/iu);
   if (!m) return null;
   const day = parseInt(m[1]);
   const monthName = m[2].toLowerCase();
