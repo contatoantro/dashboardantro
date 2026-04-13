@@ -8,7 +8,7 @@ import { requireAuth } from '@/lib/require-auth';
 interface ParsedRow {
   externalId?: string;
   date: Date;
-  publishedAt?: Date; // Sprint 4: hora exata de publicação
+  publishedAt?: Date;
   views: bigint;
   likes: bigint;
   comments: bigint;
@@ -38,11 +38,13 @@ interface DailyRow {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function parseCsvText(text: string): { headers: string[]; rows: Record<string, string>[] } {
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  // Remove BOM
+  const clean = text.replace(/^\uFEFF/, '');
+  const lines = clean.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const nonEmpty = lines.filter(l => l.trim());
   if (nonEmpty.length < 2) return { headers: [], rows: [] };
 
-  const sep = text.includes('\t') ? '\t' : ',';
+  const sep = clean.includes('\t') ? '\t' : ',';
 
   function splitLine(line: string): string[] {
     const result: string[] = [];
@@ -80,8 +82,9 @@ function col(row: Record<string, string>, ...keys: string[]): string {
 }
 
 function num(value: string): bigint {
-  const clean = value.replace(/[^\d]/g, '');
-  return BigInt(clean || '0');
+  const clean = value.replace(/[^\d-]/g, '');
+  if (!clean || clean === '-') return BigInt(0);
+  return BigInt(clean);
 }
 
 function float(value: string): number {
@@ -89,181 +92,213 @@ function float(value: string): number {
   return parseFloat(clean || '0') || 0;
 }
 
-function parseDatePtBR(value: string): Date | null {
+// DD/MM/YYYY or MM/DD/YYYY (sem hora)
+function parseDateSlash(value: string): Date | null {
   if (!value) return null;
-  const dmY = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (dmY) return new Date(parseInt(dmY[3]), parseInt(dmY[2]) - 1, parseInt(dmY[1]));
-  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]));
+  const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  const a = parseInt(m[1]);
+  const b = parseInt(m[2]);
+  const year = parseInt(m[3]);
+  // Instagram/Facebook exporta MM/DD/YYYY
+  const [month, day] = a > 12 ? [b, a] : [a, b];
+  return new Date(year, month - 1, day);
+}
+
+// MM/DD/YYYY HH:MM (Instagram/Facebook "Horário de publicação")
+function parseDatetimeSlash(value: string): Date | null {
+  if (!value) return null;
+  const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const a = parseInt(m[1]);
+  const b = parseInt(m[2]);
+  const year = parseInt(m[3]);
+  const hour = parseInt(m[4]);
+  const min = parseInt(m[5]);
+  const [month, day] = a > 12 ? [b, a] : [a, b];
+  return new Date(year, month - 1, day, hour, min);
+}
+
+// "Jan 15, 2026" (YouTube)
+function parseDateEnMonth(value: string): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (!isNaN(d.getTime())) return d;
   return null;
 }
 
-// Sprint 4: parse de data+hora — ex: "31/01/2026 14:32" ou "01/31/2026 14:32"
-function parseDatetimePtBR(value: string): Date | null {
-  if (!value) return null;
-
-  // Tenta DD/MM/YYYY HH:MM ou MM/DD/YYYY HH:MM
-  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
-  if (match) {
-    const a = parseInt(match[1]);
-    const b = parseInt(match[2]);
-    const year  = parseInt(match[3]);
-    const hour  = parseInt(match[4]);
-    const min   = parseInt(match[5]);
-    // Se primeiro campo > 12, é obrigatoriamente dia (DD/MM)
-    // Se segundo campo > 12, é obrigatoriamente mês inválido → tenta MM/DD
-    const [day, month] = a > 12 ? [a, b] : [a, b]; // Instagram exporta MM/DD/YYYY
-    return new Date(year, month - 1, day, hour, min);
-  }
-
-  // Fallback: só data sem hora
-  return parseDatePtBR(value);
-}
-
+// "Sat, Jan 31, 2026" (Twitter) ou qualquer formato en-US
 function parseDateEN(value: string): Date | null {
   if (!value) return null;
   const d = new Date(value);
   if (!isNaN(d.getTime())) return d;
-  return parseDatePtBR(value);
+  return parseDateSlash(value);
 }
 
-function calcER(likes: bigint, comments: bigint, shares: bigint, reach: bigint): number {
+// "1 de janeiro" → Date (TikTok, sem ano — assume ano corrente ou inferido)
+function parseDatePtBRMonth(value: string, inferYear?: number): Date | null {
+  if (!value) return null;
+  const meses: Record<string, number> = {
+    'janeiro': 0, 'fevereiro': 1, 'março': 2, 'marco': 2, 'abril': 3,
+    'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8,
+    'outubro': 9, 'novembro': 10, 'dezembro': 11,
+  };
+  const m = value.match(/^(\d{1,2})\s+de\s+(\w+)/i);
+  if (!m) return null;
+  const day = parseInt(m[1]);
+  const monthName = m[2].toLowerCase();
+  const monthIdx = meses[monthName];
+  if (monthIdx === undefined) return null;
+  const year = inferYear ?? new Date().getFullYear();
+  return new Date(year, monthIdx, day);
+}
+
+function calcER(likes: bigint, comments: bigint, shares: bigint, base: bigint): number {
   const interactions = Number(likes) + Number(comments) + Number(shares);
-  const base = Number(reach);
-  if (base === 0) return 0;
-  return Math.round((interactions / base) * 10000) / 100;
+  const b = Number(base);
+  if (b === 0) return 0;
+  return Math.round((interactions / b) * 10000) / 100;
 }
 
 // ─── Parsers por plataforma ───────────────────────────────────────────────────
 
-// Sprint 4: Instagram agora lê "Horário de publicação" (data+hora)
+// Instagram CSV: "Identificação do post", "Nome da conta", "Horário de publicação" (MM/DD/YYYY HH:MM),
+// "Link permanente", "Tipo de post", "Data" (="Total"), "Visualizações", "Alcance",
+// "Curtidas", "Compartilhamentos", "Comentários", "Salvamentos"
 function parseInstagram(rows: Record<string, string>[]): ParsedRow[] {
   const result: ParsedRow[] = [];
-
   for (const row of rows) {
-    const conta = col(row, 'Conta', 'Account');
-    if (conta.toLowerCase() === 'total' || conta === '') continue;
-
-    // Tenta coluna com hora primeiro; fallback para coluna só de data
-    const datetimeRaw = col(row, 'Horário de publicação', 'Post time', 'Published time');
-    const dateRaw     = col(row, 'Data', 'Date');
-
-    const publishedAt = datetimeRaw ? parseDatetimePtBR(datetimeRaw) : null;
+    const datetimeRaw = col(row, 'Horário de publicação');
+    const publishedAt = parseDatetimeSlash(datetimeRaw);
     const date = publishedAt
       ? new Date(publishedAt.getFullYear(), publishedAt.getMonth(), publishedAt.getDate())
-      : parseDatePtBR(dateRaw);
+      : parseDateSlash(col(row, 'Data'));
+    if (!date || isNaN(date.getTime())) continue;
 
-    if (!date) continue;
-
-    const reach       = num(col(row, 'Alcance', 'Reach'));
-    const impressions = num(col(row, 'Impressões', 'Impressions'));
-    const likes       = num(col(row, 'Curtidas', 'Likes'));
-    const comments    = num(col(row, 'Comentários', 'Comments'));
-    const shares      = num(col(row, 'Compartilhamentos', 'Shares'));
-    const saves       = num(col(row, 'Salvamentos', 'Saves'));
-    const postType    = col(row, 'Tipo de publicação', 'Post type', 'Media type');
-    const url         = col(row, 'URL', 'Link', 'Permalink');
-    const er          = calcER(likes, comments, shares, reach);
-    const externalId  = url || `${dateRaw}_${postType}_${Number(likes)}`;
+    const reach       = num(col(row, 'Alcance'));
+    const impressions = num(col(row, 'Visualizações'));
+    const likes       = num(col(row, 'Curtidas'));
+    const comments    = num(col(row, 'Comentários'));
+    const shares      = num(col(row, 'Compartilhamentos'));
+    const saves       = num(col(row, 'Salvamentos'));
+    const postType    = col(row, 'Tipo de post');
+    const url         = col(row, 'Link permanente');
+    const postId      = col(row, 'Identificação do post');
+    const er          = calcER(likes, comments, shares, reach > BigInt(0) ? reach : BigInt(1));
+    const externalId  = postId || url || `ig_${datetimeRaw}_${Number(likes)}`;
 
     result.push({
-      externalId,
-      date,
-      publishedAt: publishedAt ?? undefined,
-      views: impressions,
-      likes,
-      comments,
-      shares,
-      reach,
-      saves,
-      impressions,
-      er,
-      postType: postType || undefined,
-      url: url || undefined,
-      watchTimeSec: BigInt(0),
+      externalId, date, publishedAt: publishedAt ?? undefined,
+      views: impressions, likes, comments, shares, reach, saves, impressions, er,
+      postType: postType || undefined, url: url || undefined, watchTimeSec: BigInt(0),
     });
   }
-
   return result;
 }
 
+// TikTok CSV: "Date" ("1 de janeiro"), "Video Views", "Profile Views",
+// "Likes", "Comments", "Shares"
 function parseTikTokDaily(rows: Record<string, string>[]): DailyRow[] {
   const result: DailyRow[] = [];
+  const year = new Date().getFullYear();
   for (const row of rows) {
-    const dateRaw = col(row, 'Data', 'Date');
-    const date = parseDatePtBR(dateRaw);
-    if (!date) continue;
-    const views    = num(col(row, 'Visualizações de vídeo', 'Video views', 'Views'));
-    const likes    = num(col(row, 'Curtidas', 'Likes'));
-    const comments = num(col(row, 'Comentários', 'Comments'));
-    const shares   = num(col(row, 'Compartilhamentos', 'Shares'));
-    const reach    = num(col(row, 'Alcance', 'Reach', 'Unique viewers'));
+    const dateRaw = col(row, 'Date', 'Data');
+    const date = parseDatePtBRMonth(dateRaw, year) || parseDateSlash(dateRaw) || parseDateEN(dateRaw);
+    if (!date || isNaN(date.getTime())) continue;
+    const views    = num(col(row, 'Video Views', 'Visualizações de vídeo', 'Views'));
+    const likes    = num(col(row, 'Likes', 'Curtidas'));
+    const comments = num(col(row, 'Comments', 'Comentários'));
+    const shares   = num(col(row, 'Shares', 'Compartilhamentos'));
     const er       = calcER(likes, comments, shares, views > BigInt(0) ? views : BigInt(1));
-    result.push({ date, views, reach, impressions: views, likes, comments, shares, er });
+    result.push({ date, views, reach: BigInt(0), impressions: views, likes, comments, shares, er });
   }
   return result;
 }
 
+// YouTube CSV: "Conteúdo" (video ID), "Título do vídeo",
+// "Horário de publicação do vídeo" ("Jan 15, 2026"),
+// "Marcações "Gostei"", "Compartilhamentos", "Visualizações",
+// "Tempo de exibição (horas)", "Impressões"
 function parseYouTube(rows: Record<string, string>[]): ParsedRow[] {
   const result: ParsedRow[] = [];
   for (const row of rows) {
-    const title = col(row, 'Título do vídeo', 'Video title', 'Content');
-    if (!title || title.toLowerCase().includes('total') || title === '-') continue;
-    const dateRaw     = col(row, 'Data de publicação', 'Publish date', 'Date', 'Published');
-    const date        = parseDatePtBR(dateRaw) || new Date();
-    const views       = num(col(row, 'Visualizações', 'Views'));
-    const likes       = num(col(row, 'Curtidas', 'Likes'));
-    const comments    = num(col(row, 'Comentários', 'Comments'));
-    const impressions = num(col(row, 'Impressões', 'Impressions'));
-    const watchTimeSec = BigInt(Math.round(float(col(row, 'Tempo de exibição (horas)', 'Watch time (hours)', 'Watch time')) * 3600));
-    const url         = col(row, 'URL do vídeo', 'Video URL', 'URL');
-    const externalId  = url || col(row, 'ID do vídeo', 'Video ID') || `yt_${title.slice(0, 20)}_${dateRaw}`;
-    const reach       = num(col(row, 'Espectadores únicos', 'Unique viewers', 'Reach'));
-    const er          = calcER(likes, comments, BigInt(0), reach > BigInt(0) ? reach : views > BigInt(0) ? views : BigInt(1));
-    result.push({ externalId, date, views, likes, comments, shares: BigInt(0), reach, saves: BigInt(0), impressions, er, postType: 'Vídeo', title, url: url || undefined, watchTimeSec });
+    const title = col(row, 'Título do vídeo');
+    const videoId = col(row, 'Conteúdo');
+    if (!title || title.toLowerCase() === 'total' || title === '-') continue;
+    if (!videoId || videoId.toLowerCase() === 'total') continue;
+
+    const dateRaw = col(row, 'Horário de publicação do vídeo', 'Data de publicação');
+    const date = parseDateEnMonth(dateRaw) || parseDateSlash(dateRaw);
+    if (!date || isNaN(date.getTime())) continue;
+
+    const views        = num(col(row, 'Visualizações', 'Views'));
+    const likes        = num(col(row, 'Marcações "Gostei"', 'Marcações Gostei', 'Curtidas', 'Likes'));
+    const shares       = num(col(row, 'Compartilhamentos', 'Shares'));
+    const impressions  = num(col(row, 'Impressões', 'Impressions'));
+    const watchTimeH   = float(col(row, 'Tempo de exibição (horas)', 'Watch time (hours)'));
+    const watchTimeSec = BigInt(Math.round(watchTimeH * 3600));
+    const url          = `https://youtube.com/watch?v=${videoId}`;
+    const externalId   = videoId;
+    const er           = calcER(likes, BigInt(0), shares, views > BigInt(0) ? views : BigInt(1));
+
+    result.push({
+      externalId, date, views, likes, comments: BigInt(0), shares,
+      reach: BigInt(0), saves: BigInt(0), impressions, er,
+      postType: 'Vídeo', title, url, watchTimeSec,
+    });
   }
   return result;
 }
 
+// Twitter CSV: "Date" ("Sat, Jan 31, 2026"), "Impressões", "Curtidas",
+// "Compartilhamentos", "Respostas", "Reposts"
 function parseTwitterDaily(rows: Record<string, string>[]): DailyRow[] {
   const result: DailyRow[] = [];
   for (const row of rows) {
-    const dateRaw     = col(row, 'Tweet date', 'Date');
-    const date        = parseDateEN(dateRaw);
-    if (!date) continue;
-    const impressions = num(col(row, 'Impressions', 'Impressões'));
-    const likes       = num(col(row, 'Likes', 'Curtidas'));
-    const shares      = num(col(row, 'Retweets', 'Compartilhamentos'));
-    const comments    = num(col(row, 'Replies', 'Respostas', 'Comments'));
-    const reach       = num(col(row, 'Reach', 'Alcance'));
+    const dateRaw = col(row, 'Date', 'Tweet date', 'Data');
+    const date = parseDateEN(dateRaw);
+    if (!date || isNaN(date.getTime())) continue;
+    const impressions = num(col(row, 'Impressões', 'Impressions'));
+    const likes       = num(col(row, 'Curtidas', 'Likes'));
+    const shares      = num(col(row, 'Compartilhamentos', 'Shares', 'Reposts', 'Retweets'));
+    const comments    = num(col(row, 'Respostas', 'Replies', 'Comments'));
     const er          = calcER(likes, comments, shares, impressions > BigInt(0) ? impressions : BigInt(1));
-    result.push({ date, views: impressions, reach, impressions, likes, comments, shares, er });
+    result.push({ date, views: impressions, reach: BigInt(0), impressions, likes, comments, shares, er });
   }
   return result;
 }
 
+// Facebook CSV: "Identificação do post", "Nome da Página",
+// "Horário de publicação" (MM/DD/YYYY HH:MM), "Link permanente",
+// "Tipo de post", "Visualizações", "Alcance", "Reações", "Comentários",
+// "Compartilhamentos"
 function parseFacebook(rows: Record<string, string>[]): ParsedRow[] {
   const result: ParsedRow[] = [];
   for (const row of rows) {
-    const dateRaw  = col(row, 'Data de publicação', 'Published', 'Post Published Date', 'Date');
-    const date     = parseDatePtBR(dateRaw) || parseDateEN(dateRaw);
-    if (!date) continue;
-    const postId   = col(row, 'Post ID', 'ID da publicação');
-    const postType = col(row, 'Tipo de postagem', 'Post type', 'Type');
-    const reach    = num(col(row, 'Alcance', 'Reach', 'Post reach'));
-    const impressions = num(col(row, 'Impressões', 'Impressions', 'Post impressions'));
-    const likes    = num(col(row, 'Reações', 'Reactions', 'Likes', 'Post reactions'));
-    const comments = num(col(row, 'Comentários', 'Comments', 'Post comments'));
-    const shares   = num(col(row, 'Compartilhamentos', 'Shares', 'Post shares'));
-    const url      = col(row, 'URL da publicação', 'Post URL', 'Permalink');
-    const externalId = postId || url || `fb_${dateRaw}_${Number(likes)}`;
-    const er       = calcER(likes, comments, shares, reach > BigInt(0) ? reach : BigInt(1));
-    const knownCols = new Set(['post id','id da publicação','data de publicação','published','tipo de postagem','post type','alcance','reach','impressões','impressions','reações','reactions','likes','comentários','comments','compartilhamentos','shares','url da publicação','permalink']);
-    const rawExtra: Record<string, string> = {};
-    for (const [k, v] of Object.entries(row)) {
-      if (v && !knownCols.has(k.toLowerCase())) rawExtra[k] = v;
-    }
-    result.push({ externalId, date, views: impressions, likes, comments, shares, reach, saves: BigInt(0), impressions, er, postType: postType || undefined, url: url || undefined, watchTimeSec: BigInt(0), rawExtra: Object.keys(rawExtra).length > 0 ? rawExtra : undefined });
+    const datetimeRaw = col(row, 'Horário de publicação');
+    const publishedAt = parseDatetimeSlash(datetimeRaw);
+    const date = publishedAt
+      ? new Date(publishedAt.getFullYear(), publishedAt.getMonth(), publishedAt.getDate())
+      : parseDateSlash(col(row, 'Data'));
+    if (!date || isNaN(date.getTime())) continue;
+
+    const postId     = col(row, 'Identificação do post', 'Post ID');
+    const postType   = col(row, 'Tipo de post', 'Tipo de postagem');
+    const reach      = num(col(row, 'Alcance', 'Reach'));
+    const views      = num(col(row, 'Visualizações', 'Views'));
+    const likes      = num(col(row, 'Reações', 'Reactions', 'Likes'));
+    const comments   = num(col(row, 'Comentários', 'Comments'));
+    const shares     = num(col(row, 'Compartilhamentos', 'Shares'));
+    const url        = col(row, 'Link permanente', 'Permalink');
+    const externalId = postId || url || `fb_${datetimeRaw}_${Number(likes)}`;
+    const er         = calcER(likes, comments, shares, reach > BigInt(0) ? reach : BigInt(1));
+
+    result.push({
+      externalId, date, publishedAt: publishedAt ?? undefined,
+      views, likes, comments, shares, reach, saves: BigInt(0),
+      impressions: views, er,
+      postType: postType || undefined, url: url || undefined, watchTimeSec: BigInt(0),
+    });
   }
   return result;
 }
@@ -291,7 +326,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Brand não encontrada: ${brandId}` }, { status: 404 });
     }
 
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: 'Arquivo muito grande. Limite: 10 MB.' }, { status: 413 });
     }
@@ -306,6 +341,7 @@ export async function POST(req: NextRequest) {
     const plt = platform as Platform;
     let rowsOk = 0;
     let rowsSkip = 0;
+    let lastError = '';
 
     if (plt === 'instagram' || plt === 'youtube' || plt === 'facebook') {
       const parser = plt === 'instagram' ? parseInstagram
@@ -313,6 +349,7 @@ export async function POST(req: NextRequest) {
                    : parseFacebook;
       const parsed = parser(rows);
       rowsSkip = rows.length - parsed.length;
+      console.log(`[import] ${plt}: ${rows.length} raw rows → ${parsed.length} parsed`);
 
       for (const p of parsed) {
         try {
@@ -347,7 +384,11 @@ export async function POST(req: NextRequest) {
             },
           });
           rowsOk++;
-        } catch { rowsSkip++; }
+        } catch (e) {
+          lastError = String(e);
+          console.error(`[import] post upsert fail:`, e);
+          rowsSkip++;
+        }
       }
     }
 
@@ -355,6 +396,7 @@ export async function POST(req: NextRequest) {
       const parser = plt === 'tiktok' ? parseTikTokDaily : parseTwitterDaily;
       const parsed = parser(rows);
       rowsSkip = rows.length - parsed.length;
+      console.log(`[import] ${plt}: ${rows.length} raw rows → ${parsed.length} parsed`);
 
       for (const d of parsed) {
         try {
@@ -364,7 +406,11 @@ export async function POST(req: NextRequest) {
             create: { brandId, platform: plt, date: d.date, views: d.views, reach: d.reach, impressions: d.impressions, likes: d.likes, comments: d.comments, shares: d.shares, er: d.er },
           });
           rowsOk++;
-        } catch { rowsSkip++; }
+        } catch (e) {
+          lastError = String(e);
+          console.error(`[import] daily upsert fail:`, e);
+          rowsSkip++;
+        }
       }
     }
 
@@ -372,14 +418,18 @@ export async function POST(req: NextRequest) {
       data: {
         brandId, platform: plt, filename: file.name,
         rowsTotal: rows.length, rowsOk, rowsSkip,
-        status: rowsSkip === rows.length ? 'ERROR' : rowsSkip > 0 ? 'PARTIAL' : 'OK',
+        status: rowsOk === 0 ? 'ERROR' : rowsSkip > 0 ? 'PARTIAL' : 'OK',
       },
     });
 
-    return NextResponse.json({ ok: true, platform: plt, filename: file.name, rowsTotal: rows.length, rowsOk, rowsSkip });
+    return NextResponse.json({
+      ok: true, platform: plt, filename: file.name,
+      rowsTotal: rows.length, rowsOk, rowsSkip,
+      ...(lastError && rowsOk === 0 ? { debug: lastError.slice(0, 200) } : {}),
+    });
 
   } catch (err) {
     console.error('[import] erro:', err);
-    return NextResponse.json({ error: 'Erro interno no servidor.' }, { status: 500 });
+    return NextResponse.json({ error: 'Erro interno no servidor.', debug: String(err).slice(0, 200) }, { status: 500 });
   }
 }
