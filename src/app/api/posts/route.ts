@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     // ── Plataformas com posts individuais ─────────────────────────────────────
     // TikTok e Twitter usam DailyMetric — retornam linhas diárias como "posts"
-    const usesDaily = plt === 'tiktok' || plt === 'twitter';
+    const usesDaily = plt === 'tiktok';
 
     if (usesDaily) {
       const rows = await prisma.dailyMetric.findMany({
